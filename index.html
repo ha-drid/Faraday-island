@@ -1,0 +1,136 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="theme-color" content="#eaf3f6">
+<title>Остров Фарадея — 3D-песочница</title>
+<meta name="description" content="Строй остров, собирай электрические цепи и исследуй магнитное поле.">
+<link rel="stylesheet" href="./style.css">
+<script type="importmap">{"imports":{"three":"https://cdn.jsdelivr.net/npm/three@0.180.0/build/three.module.js","three/addons/":"https://cdn.jsdelivr.net/npm/three@0.180.0/examples/jsm/"}}</script>
+</head>
+<body>
+<header class="top">
+  <div class="brand"><span class="logo" aria-hidden="true">ϟ</span><div><strong>Остров Фарадея</strong><small>Песочница по электродинамике</small></div></div>
+  <div class="top-actions"><button id="undo" title="Отменить" aria-label="Отменить">↶</button><button id="help" aria-label="Справка">?</button></div>
+</header>
+<main>
+  <section class="stage" aria-label="Трёхмерный остров">
+    <div id="view"></div>
+    <div class="stage-top">
+      <label class="experiment"><span>Опыт</span>
+        <select id="preset" aria-label="Выбрать опыт">
+          <option value="circuit">Электрическая цепь</option>
+          <option value="magnet">Постоянные магниты</option>
+          <option value="induction">Индукция в катушке</option>
+          <option value="powered">Катушка с батарейкой</option>
+          <option value="alternating">Переменный ток</option>
+          <option value="oscillation">Колебательный контур</option>
+          <option value="empty">Пустой остров</option>
+        </select>
+      </label>
+      <div class="view-actions">
+        <button id="field" aria-pressed="false" aria-expanded="false" aria-controls="field-options">Поле</button>
+        <button id="fullscreen" aria-label="На весь экран" title="На весь экран">⛶</button>
+        <button id="camera" title="Вернуть камеру" aria-label="Вернуть камеру">⌂</button>
+      </div>
+    </div>
+    <div id="field-options" hidden>
+      <label for="field-mode">Визуализация поля</label>
+      <select id="field-mode">
+        <option value="off">Выкл.</option>
+        <option value="lines">Магнитные линии отдельных источников</option>
+        <option value="charges">Движение зарядов</option>
+        <option value="vectors">Общее магнитное поле B</option>
+      </select>
+      <div id="vector-options" hidden>
+        <label for="field-density">Плотность стрелок <output id="density-value"></output></label>
+        <input id="field-density" type="range" min="4" max="12" value="8">
+        <div class="field-gradient" aria-hidden="true"></div>
+        <div class="field-scale"><span>Слабое</span><span>Сильное</span></div>
+      </div>
+    </div>
+    <div class="stage-controls">
+      <section id="part-controls" aria-label="Настройка детали" hidden>
+        <div class="part-controls-head">
+          <strong id="part-controls-title"></strong>
+          <button id="rotate-part" type="button" aria-label="Повернуть выбранный прибор на 90 градусов"></button>
+          <button id="close-part-controls" type="button" aria-label="Закрыть настройку">×</button>
+        </div>
+        <output id="part-status" hidden></output>
+        <button id="meter-mode" type="button" hidden></button>
+        <div id="part-parameter" hidden>
+          <label for="part-range"><span id="part-range-label"></span><output id="part-value"></output></label>
+          <input id="part-range" type="range">
+          <small id="part-windings" hidden></small>
+          <label id="part-extra-label" for="part-extra"><span></span><output id="part-extra-value"></output></label>
+          <input id="part-extra" type="range" hidden>
+        </div>
+      </section>
+      <label id="walk-magnet" hidden><span>Высота магнита</span><input aria-label="Высота магнита" type="range" min="0" max="100" value="0"><output></output></label>
+    </div>
+    <details id="scope" hidden>
+      <summary id="scope-title">График напряжения и тока</summary>
+      <div id="scope-legend"><span id="scope-voltage-label"></span><span id="scope-current-label"></span></div>
+      <canvas id="scope-plot" width="480" height="166" aria-label="График напряжения и тока за последние шесть секунд"></canvas>
+      <div id="scope-scale"></div>
+    </details>
+    <a id="open-standalone" href="./" target="_blank" rel="noopener" hidden>Открыть игру отдельно</a>
+    <div id="loading" role="status">Загрузка 3D-сцены…</div>
+    <div class="stage-bottom">
+      <span id="hint">Потяни для поворота. Коснись детали, чтобы выбрать её.</span>
+      <div class="perspective-actions">
+        <button id="body-place" aria-pressed="false">Поставить фигурку</button>
+        <button id="perspective">От 1-го лица</button>
+      </div>
+    </div>
+    <div id="crosshair" aria-hidden="true"></div>
+    <div id="joystick" aria-label="Джойстик движения"><span></span></div>
+    <div id="remove-progress" hidden aria-hidden="true"></div>
+  </section>
+  <aside class="inspector" aria-label="Параметры опыта">
+    <div class="inspector-next"><span class="eyebrow">Лаборатория</span><span id="badge">ЦЕПЬ</span></div>
+    <h1 id="experiment-title">Электрическая цепь</h1>
+    <p id="experiment-description"></p>
+    <label id="overview-magnet" hidden><span>Высота магнита</span><input aria-label="Высота магнита" type="range" min="0" max="100" value="0"><output></output></label>
+    <button id="polarity" hidden>Поменять полярность</button>
+    <div id="details"></div>
+  </aside>
+</main>
+<footer class="workbench">
+  <div class="toolbar"><div class="tool-heading"><strong>Конструктор</strong><span id="placement">Осмотр</span></div><div class="tools"><button id="rotate" aria-label="Повернуть на 90 градусов" title="Повернуть на 90°">⟳ <span id="angle">90°</span></button><button id="remove" aria-pressed="false">Стереть</button></div></div>
+  <div class="palette" id="palette" aria-label="Палитра блоков"></div>
+</footer>
+<div id="orientation" hidden>
+  <div>
+    <svg class="orientation-icon" viewBox="0 0 96 96" fill="none" stroke="currentColor" stroke-width="4.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+      <g class="orientation-phone" transform="rotate(-39 48 48)"><rect x="35" y="24" width="26" height="48" rx="5"/><path d="M45 65h6"/></g>
+      <path d="M13 42a36 36 0 0 1 66-17m-12-1 13 3 3-13M83 54a36 36 0 0 1-66 17m12 1-13-3-3 13"/>
+    </svg>
+    <strong id="orientation-text"></strong><button id="orientation-back">Общий вид</button>
+  </div>
+</div>
+<dialog id="guide">
+  <form method="dialog"><button class="close" aria-label="Закрыть">×</button></form>
+  <h2>Управление островом</h2>
+  <p><b>Камера.</b> Перетаскивай сцену одним пальцем или мышью. Меняй масштаб двумя пальцами или колёсиком.</p>
+  <p><b>Строительство.</b> Выбери деталь и коснись земли или грани блока. Коснись прибора, чтобы открыть его настройки. Кнопка ⟳ поворачивает выбранный прибор или деталь перед установкой.</p>
+  <p><b>От первого лица.</b> В общем виде нажми «Поставить фигурку» и выбери место. В первом лице перетаскивай сцену для осмотра. На телефоне двигайся джойстиком, на ПК — клавишами WASD или стрелками. Коснись грани блока, чтобы поставить деталь, или удерживай блок две секунды, чтобы удалить его. Для взаимодействия на ПК также можно нажать E, наведя прицел.</p>
+  <p><b>Цепь.</b> Медные контакты соседних клеток соединяются автоматически. Провод соединяет все прилегающие контакты, включая соседей сверху и снизу. Нажми на рычаг, чтобы замкнуть цепь. Амперметр включай последовательно, а вольтметр подключай параллельно исследуемой детали. В режиме «Осмотр» коснись элемента цепи, чтобы открыть его график. Для провода показаны потенциал узла и ток участка с наибольшим модулем.</p>
+  <p><b>Модель.</b> Метод узловых потенциалов, фиксированное сопротивление лампы и RL-модель катушки. Голубые кольца показывают направление поля прямого участка провода с током. Фиолетовые и медные линии показывают поле магнита и катушки в дипольном приближении. Каждый источник показан отдельно. В режиме общего магнитного поля стрелки показывают направление суммы вкладов. В режиме «Движение зарядов» точки показывают дрейф электронов по проводам и виткам катушек против направления условного тока. Скорость анимации условная. На внутренних поверхностях обкладок конденсатора красные точки показывают положительный заряд, синие — отрицательный. При переменном токе направление движения меняется вместе со знаком тока. Для амперметра и вольтметра можно выбрать мгновенное или действующее значение. Действующее значение считается за период генератора, а при нескольких источниках разной частоты — за последнюю секунду. В режиме отдельных источников больший ток делает линии проводов и катушек заметнее. Коснись батарейки, катушки или резистора, чтобы изменить ЭДС, индуктивность или сопротивление прямо в сцене. У обеих катушек индуктивность и активное сопротивление обмотки настраиваются отдельно. Индуктивность меняет число витков. У амперметра внутреннее сопротивление 0,02 Ом. Выбери катушку с магнитом, чтобы управлять его высотой ползунком. Отойди от неё, чтобы отпустить магнит.</p>
+</dialog>
+<script>
+{
+  const loading = document.querySelector('#loading');
+  if (location.protocol === 'file:') {
+    loading.textContent = 'Для локального запуска открой start-windows.bat или запусти start-local.py через Python. Подробности в README.md.';
+  } else {
+    import('./scene.mjs').catch(error => {
+      loading.textContent = 'Не удалось загрузить 3D-сцену. Проверь, что все файлы архива распакованы и доступен cdn.jsdelivr.net. Подробности ошибки есть в консоли браузера (F12).';
+      console.error(error);
+    });
+  }
+}
+</script>
+</body>
+</html>
